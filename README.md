@@ -4,14 +4,14 @@ A robust, universal GitHub Actions workflow for automating WordPress plugin rele
 
 ## Features
 
-✅ **Smart Auto-Detection** - Automatically detects plugin slug, main file, and version
-✅ **Flexible Configuration** - Override any default with custom inputs
-✅ **Version Validation** - Ensures consistency across plugin header, readme.txt, and package.json
-✅ **GitHub Releases** - Creates releases with auto-generated changelogs
-✅ **WordPress.org Deployment** - Automated SVN deployment to WordPress.org repository
-✅ **Asset Management** - Handles plugin assets (banners, icons, screenshots)
-✅ **Build System Support** - Works with npm, composer-only, or custom build systems
-✅ **ZIP Validation** - Verifies plugin structure and dependencies
+- ✅ **Smart Auto-Detection** - Automatically detects plugin slug, main file, and version
+- ✅ **Flexible Configuration** - Override any default with custom inputs
+- ✅ **Version Validation** - Ensures consistency across plugin header, readme.txt, and package.json
+- ✅ **GitHub Releases** - Creates releases with auto-generated changelogs
+- ✅ **WordPress.org Deployment** - Automated SVN deployment to WordPress.org repository
+- ✅ **Asset Management** - Handles plugin assets (banners, icons, screenshots)
+- ✅ **Build System Support** - Works with npm, composer-only, or custom build systems
+- ✅ **ZIP Validation** - Verifies plugin structure and dependencies
 
 ## Quick Start
 
@@ -29,7 +29,7 @@ on:
 
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     secrets:
       SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
       SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
@@ -86,7 +86,7 @@ The workflow automatically detects:
 ```yaml
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     with:
       node_version: "23"
       build_command: "npm run build"
@@ -150,7 +150,7 @@ jobs:
 ```yaml
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     secrets:
       SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
       SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
@@ -161,7 +161,7 @@ jobs:
 ```yaml
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     with:
       build_command: "npm run production"
       validate_zip_script: "__tests__/validate.sh"
@@ -175,7 +175,7 @@ jobs:
 ```yaml
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     with:
       skip_build: true
       version_files: '["plugin_header", "readme.txt"]'
@@ -189,7 +189,7 @@ jobs:
 ```yaml
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     with:
       deploy_to_wordpress: false
 ```

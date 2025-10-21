@@ -10,7 +10,7 @@ on:
 
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     with:
       # Build configuration
       node_version: "23"

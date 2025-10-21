@@ -10,7 +10,7 @@ on:
 
 jobs:
   release:
-    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@main
     with:
       # Explicit plugin identification (auto-detected if omitted)
       plugin_slug: "my-awesome-plugin"
