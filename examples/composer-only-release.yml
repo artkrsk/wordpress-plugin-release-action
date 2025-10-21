@@ -1,0 +1,27 @@
+# Composer-Only WordPress Plugin Release Workflow
+# For plugins that don't require npm build (pure PHP plugins)
+
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    with:
+      # Skip npm build for composer-only plugins
+      skip_build: true
+
+      # Version validation (no package.json check)
+      version_files: '["plugin_header", "readme.txt"]'
+
+      # WordPress.org deployment
+      deploy_to_wordpress: true
+      assets_directory: "assets"
+
+    secrets:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}

@@ -1,0 +1,50 @@
+# Advanced WordPress Plugin Release Workflow
+# Full configuration with all options
+
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    with:
+      # Explicit plugin identification (auto-detected if omitted)
+      plugin_slug: "my-awesome-plugin"
+      main_plugin_file: "src/wordpress-plugin/my-awesome-plugin.php"
+
+      # Build configuration
+      node_version: "23"
+      build_command: "npm run build"
+      skip_build: false # Set to true for composer-only plugins
+
+      # Testing
+      test_command: "npm run test"
+      validate_zip_script: "__tests__/validate-zip.sh"
+
+      # Paths
+      zip_path: "dist/{slug}.zip" # {slug} is replaced with plugin_slug
+      assets_directory: "__assets__"
+
+      # WordPress.org deployment
+      deploy_to_wordpress: true
+      wordpress_svn_url: "https://plugins.svn.wordpress.org/my-awesome-plugin/"
+
+      # Changelog
+      changelog_since_last_tag: true
+      initial_release_changelog: |
+        ## 🚀 Features
+        * Awesome feature 1
+        * Amazing feature 2
+        * Cool feature 3
+
+      # Version validation
+      skip_version_validation: false
+      version_files: '["plugin_header", "readme.txt", "package.json"]'
+
+    secrets:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}

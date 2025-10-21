@@ -1,0 +1,16 @@
+# Minimal WordPress Plugin Release Workflow
+# Uses all auto-detection and defaults
+
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    secrets:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}

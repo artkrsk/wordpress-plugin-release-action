@@ -1,0 +1,531 @@
+name: WordPress Plugin Release
+
+on:
+  workflow_call:
+    inputs:
+      # Plugin identification
+      plugin_slug:
+        description: 'Plugin slug (auto-detected if not provided)'
+        required: false
+        type: string
+      main_plugin_file:
+        description: 'Main plugin file path (auto-detected if not provided)'
+        required: false
+        type: string
+
+      # Build configuration
+      node_version:
+        description: 'Node.js version for build'
+        required: false
+        type: string
+        default: '23'
+      build_command:
+        description: 'Build command to execute'
+        required: false
+        type: string
+        default: 'npm run build'
+      skip_build:
+        description: 'Skip build step (for composer-only plugins)'
+        required: false
+        type: boolean
+        default: false
+
+      # Validation configuration
+      test_command:
+        description: 'Optional test command to run before release'
+        required: false
+        type: string
+      validate_zip_script:
+        description: 'Path to custom ZIP validation script'
+        required: false
+        type: string
+
+      # Paths configuration
+      zip_path:
+        description: 'Path to generated ZIP file (supports {slug} placeholder)'
+        required: false
+        type: string
+        default: 'dist/{slug}.zip'
+      assets_directory:
+        description: 'Directory containing WordPress.org assets'
+        required: false
+        type: string
+        default: '__assets__'
+
+      # WordPress.org deployment
+      deploy_to_wordpress:
+        description: 'Deploy to WordPress.org SVN repository'
+        required: false
+        type: boolean
+        default: true
+      wordpress_svn_url:
+        description: 'WordPress.org SVN URL (auto-constructed if not provided)'
+        required: false
+        type: string
+
+      # Changelog configuration
+      changelog_since_last_tag:
+        description: 'Generate changelog from last tag'
+        required: false
+        type: boolean
+        default: true
+      initial_release_changelog:
+        description: 'Custom changelog for initial release'
+        required: false
+        type: string
+
+      # Version validation
+      skip_version_validation:
+        description: 'Skip version consistency checks'
+        required: false
+        type: boolean
+        default: false
+      version_files:
+        description: 'JSON array of files to check for version consistency'
+        required: false
+        type: string
+        default: '["plugin_header", "readme.txt", "package.json"]'
+
+    secrets:
+      SVN_USERNAME:
+        description: 'WordPress.org SVN username'
+        required: false
+      SVN_PASSWORD:
+        description: 'WordPress.org SVN password'
+        required: false
+
+jobs:
+  detect:
+    name: Detect Plugin Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      plugin_slug: ${{ steps.detect.outputs.plugin_slug }}
+      main_plugin_file: ${{ steps.detect.outputs.main_plugin_file }}
+      plugin_version: ${{ steps.detect.outputs.plugin_version }}
+      zip_path: ${{ steps.detect.outputs.zip_path }}
+      svn_url: ${{ steps.detect.outputs.svn_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect plugin metadata
+        id: detect
+        run: |
+          # Source detection script
+          source ${{ github.action_path }}/scripts/detect-plugin.sh
+
+          # Detect or use provided values
+          if [ -n "${{ inputs.plugin_slug }}" ]; then
+            PLUGIN_SLUG="${{ inputs.plugin_slug }}"
+          else
+            PLUGIN_SLUG=$(detect_plugin_slug)
+          fi
+
+          if [ -n "${{ inputs.main_plugin_file }}" ]; then
+            MAIN_FILE="${{ inputs.main_plugin_file }}"
+          else
+            MAIN_FILE=$(detect_main_plugin_file)
+          fi
+
+          # Extract version
+          PLUGIN_VERSION=$(extract_plugin_version "$MAIN_FILE")
+
+          # Construct paths
+          ZIP_PATH="${{ inputs.zip_path }}"
+          ZIP_PATH="${ZIP_PATH/\{slug\}/$PLUGIN_SLUG}"
+
+          SVN_URL="${{ inputs.wordpress_svn_url }}"
+          if [ -z "$SVN_URL" ]; then
+            SVN_URL="https://plugins.svn.wordpress.org/$PLUGIN_SLUG/"
+          fi
+
+          # Output results
+          echo "plugin_slug=$PLUGIN_SLUG" >> $GITHUB_OUTPUT
+          echo "main_plugin_file=$MAIN_FILE" >> $GITHUB_OUTPUT
+          echo "plugin_version=$PLUGIN_VERSION" >> $GITHUB_OUTPUT
+          echo "zip_path=$ZIP_PATH" >> $GITHUB_OUTPUT
+          echo "svn_url=$SVN_URL" >> $GITHUB_OUTPUT
+
+          # Log for visibility
+          echo "✅ Detected plugin slug: $PLUGIN_SLUG"
+          echo "✅ Main plugin file: $MAIN_FILE"
+          echo "✅ Plugin version: $PLUGIN_VERSION"
+          echo "✅ ZIP path: $ZIP_PATH"
+
+  test:
+    name: Test & Validate
+    needs: detect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        if: ${{ !inputs.skip_build }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+
+      - name: Install dependencies
+        if: ${{ !inputs.skip_build }}
+        run: |
+          if [ -f "package.json" ]; then
+            npm install
+          fi
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Run build
+        if: ${{ !inputs.skip_build }}
+        run: ${{ inputs.build_command }}
+        env:
+          DEBUG: '1'
+
+      - name: Run custom tests
+        if: ${{ inputs.test_command }}
+        run: ${{ inputs.test_command }}
+
+      - name: Examine ZIP contents on failure
+        if: ${{ failure() }}
+        run: |
+          ZIP_PATH="${{ needs.detect.outputs.zip_path }}"
+          echo "Checking if ZIP file exists at: $ZIP_PATH"
+
+          if [ -f "$ZIP_PATH" ]; then
+            echo "✅ ZIP file exists"
+            echo "Listing ZIP contents:"
+            unzip -l "$ZIP_PATH"
+
+            echo "Extracting ZIP to check structure..."
+            mkdir -p /tmp/zip-check
+            unzip -q "$ZIP_PATH" -d /tmp/zip-check
+
+            echo "Directory structure:"
+            find /tmp/zip-check -type f | head -20
+          else
+            echo "❌ ZIP file not found at $ZIP_PATH"
+            echo "Looking for ZIP files in dist/:"
+            find dist -name "*.zip" 2>/dev/null || echo "No ZIP files found"
+          fi
+
+      - name: Validate plugin structure
+        if: ${{ inputs.validate_zip_script }}
+        run: bash ${{ inputs.validate_zip_script }}
+        env:
+          ZIP_PATH: ${{ needs.detect.outputs.zip_path }}
+          PLUGIN_SLUG: ${{ needs.detect.outputs.plugin_slug }}
+
+  build_and_release:
+    name: Build & Release
+    needs: [detect, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        if: ${{ !inputs.skip_build }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+
+      - name: Validate version consistency
+        if: ${{ !inputs.skip_version_validation }}
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PLUGIN_FILE="${{ needs.detect.outputs.main_plugin_file }}"
+
+          # Extract plugin version
+          PLUGIN_VERSION=$(grep -m 1 "Version:" "$PLUGIN_FILE" | awk '{print $3}' | tr -d '\r')
+
+          echo "Tag version: $TAG_VERSION"
+          echo "Plugin version: $PLUGIN_VERSION"
+
+          VERSIONS_TO_CHECK='${{ inputs.version_files }}'
+
+          # Check readme.txt if specified
+          if echo "$VERSIONS_TO_CHECK" | grep -q "readme.txt"; then
+            if [ -f "readme.txt" ]; then
+              README_VERSION=$(grep "Stable tag:" readme.txt | awk '{print $3}' | tr -d '\r')
+              echo "Readme version: $README_VERSION"
+
+              if [ "$TAG_VERSION" != "$README_VERSION" ]; then
+                echo "❌ readme.txt version mismatch!"
+                exit 1
+              fi
+            fi
+          fi
+
+          # Check package.json if specified
+          if echo "$VERSIONS_TO_CHECK" | grep -q "package.json"; then
+            if [ -f "package.json" ]; then
+              PACKAGE_VERSION=$(node -p "require('./package.json').version")
+              echo "Package.json version: $PACKAGE_VERSION"
+
+              if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+                echo "❌ package.json version mismatch!"
+                exit 1
+              fi
+            fi
+          fi
+
+          # Check plugin header
+          if [ "$TAG_VERSION" != "$PLUGIN_VERSION" ]; then
+            echo "❌ Plugin header version mismatch!"
+            exit 1
+          fi
+
+          echo "✅ All versions match: $TAG_VERSION"
+
+      - name: Install dependencies
+        if: ${{ !inputs.skip_build }}
+        run: |
+          if [ -f "package.json" ]; then
+            npm install
+          fi
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y jq
+
+      - name: Build project
+        if: ${{ !inputs.skip_build }}
+        run: ${{ inputs.build_command }}
+
+      - name: Verify ZIP file exists
+        run: |
+          ZIP_PATH="${{ needs.detect.outputs.zip_path }}"
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "❌ ZIP file not found at: $ZIP_PATH"
+            echo "Contents of dist/:"
+            ls -la dist/ 2>/dev/null || echo "dist/ directory not found"
+            exit 1
+          fi
+          echo "✅ ZIP file found at: $ZIP_PATH"
+
+      - name: Verify vendor directory in ZIP
+        run: |
+          ZIP_PATH="${{ needs.detect.outputs.zip_path }}"
+
+          if unzip -l "$ZIP_PATH" | grep -q "vendor/autoload.php"; then
+            echo "✅ vendor/autoload.php found in ZIP file"
+          else
+            echo "⚠️ vendor/autoload.php not found in ZIP file"
+            echo "This may be expected if the plugin doesn't use Composer"
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [ "${{ inputs.changelog_since_last_tag }}" = "true" ]; then
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+            if [ -z "$PREVIOUS_TAG" ]; then
+              # First release
+              if [ -n "${{ inputs.initial_release_changelog }}" ]; then
+                echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+                echo "${{ inputs.initial_release_changelog }}" >> $GITHUB_ENV
+                echo "EOF" >> $GITHUB_ENV
+              else
+                echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+                echo "## 🚀 Initial Release" >> $GITHUB_ENV
+                echo "" >> $GITHUB_ENV
+                echo "First release of ${{ needs.detect.outputs.plugin_slug }}" >> $GITHUB_ENV
+                echo "EOF" >> $GITHUB_ENV
+              fi
+            else
+              echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+              echo "## What's Changed Since $PREVIOUS_TAG" >> $GITHUB_ENV
+              echo "" >> $GITHUB_ENV
+              git log --pretty=format:"* %s" $PREVIOUS_TAG..HEAD | grep -v "Merge" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            fi
+          else
+            echo "CHANGELOG=See commit history for changes" >> $GITHUB_ENV
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ needs.detect.outputs.zip_path }}
+          draft: false
+          prerelease: false
+          name: Release ${{ github.ref_name }}
+          body: |
+            # ${{ needs.detect.outputs.plugin_slug }} ${{ github.ref_name }}
+
+            ${{ env.CHANGELOG }}
+
+            ## Installation
+            Download the zip file and install via WordPress plugin manager or extract to wp-content/plugins.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Build Artifact
+        if: ${{ inputs.deploy_to_wordpress }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-zip
+          path: ${{ needs.detect.outputs.zip_path }}
+          retention-days: 1
+
+  deploy_to_wordpress:
+    name: Deploy to WordPress.org
+    needs: [detect, build_and_release]
+    if: ${{ inputs.deploy_to_wordpress }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download plugin ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: plugin-zip
+          path: dist/
+
+      - name: Extract tag name
+        id: get-tag
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/v}"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "Tag name for WordPress deployment: $TAG_NAME"
+
+      - name: Extract plugin
+        run: |
+          ZIP_PATH="${{ needs.detect.outputs.zip_path }}"
+          PLUGIN_SLUG="${{ needs.detect.outputs.plugin_slug }}"
+
+          mkdir -p /tmp/plugin
+          unzip -q "$ZIP_PATH" -d /tmp/plugin
+
+          echo "Extracted plugin structure:"
+          ls -la /tmp/plugin
+
+      - name: Setup SVN
+        run: |
+          which svn || sudo apt-get update && sudo apt-get install -y subversion
+
+      - name: Checkout SVN repository
+        run: |
+          SVN_URL="${{ needs.detect.outputs.svn_url }}"
+
+          mkdir -p /tmp/svn
+          svn checkout --non-interactive --trust-server-cert \
+            --username=${{ secrets.SVN_USERNAME }} \
+            --password=${{ secrets.SVN_PASSWORD }} \
+            "$SVN_URL" /tmp/svn
+
+          mkdir -p /tmp/svn/trunk
+          mkdir -p /tmp/svn/assets
+          mkdir -p "/tmp/svn/tags/${{ env.TAG_NAME }}"
+
+      - name: Update trunk
+        run: |
+          PLUGIN_SLUG="${{ needs.detect.outputs.plugin_slug }}"
+
+          echo "Updating trunk..."
+          rm -rf /tmp/svn/trunk/*
+
+          # Handle both flat and nested ZIP structures
+          if [ -d "/tmp/plugin/$PLUGIN_SLUG" ]; then
+            cp -R "/tmp/plugin/$PLUGIN_SLUG/"* /tmp/svn/trunk/
+          else
+            cp -R /tmp/plugin/* /tmp/svn/trunk/
+          fi
+
+          echo "✅ Trunk updated."
+
+      - name: Update tag
+        run: |
+          echo "Creating tag ${{ env.TAG_NAME }}..."
+
+          if [ -d "/tmp/svn/tags/${{ env.TAG_NAME }}" ]; then
+            rm -rf "/tmp/svn/tags/${{ env.TAG_NAME }}"
+          fi
+
+          mkdir -p "/tmp/svn/tags/${{ env.TAG_NAME }}"
+          cp -R /tmp/svn/trunk/* "/tmp/svn/tags/${{ env.TAG_NAME }}"
+
+          echo "✅ Tag created."
+
+      - name: Update assets
+        run: |
+          ASSETS_DIR="${{ inputs.assets_directory }}"
+          PLUGIN_SLUG="${{ needs.detect.outputs.plugin_slug }}"
+          SVN_ASSETS_URL="https://ps.w.org/$PLUGIN_SLUG/assets"
+
+          echo "Updating assets..."
+          mkdir -p /tmp/svn/assets
+
+          if [ -d "$ASSETS_DIR" ]; then
+            cp -R "$ASSETS_DIR/"* /tmp/svn/assets/
+            echo "✅ Copied assets from $ASSETS_DIR"
+          else
+            echo "Local assets not found, attempting to preserve existing..."
+
+            ASSET_FILES=(
+              "banner-772x250.png"
+              "banner-1544x500.png"
+              "icon-128x128.png"
+              "icon-256x256.png"
+            )
+
+            ASSETS_FOUND=false
+            for asset in "${ASSET_FILES[@]}"; do
+              if curl --output /dev/null --silent --head --fail "$SVN_ASSETS_URL/$asset"; then
+                echo "Found $asset, preserving..."
+                curl -s "$SVN_ASSETS_URL/$asset" -o "/tmp/svn/assets/$asset"
+                ASSETS_FOUND=true
+              fi
+            done
+
+            for i in {1..10}; do
+              if curl --output /dev/null --silent --head --fail "$SVN_ASSETS_URL/screenshot-$i.png"; then
+                echo "Found screenshot-$i.png, preserving..."
+                curl -s "$SVN_ASSETS_URL/screenshot-$i.png" -o "/tmp/svn/assets/screenshot-$i.png"
+                ASSETS_FOUND=true
+              fi
+            done
+
+            if [ "$ASSETS_FOUND" = false ]; then
+              echo "⚠️ No assets found. Upload manually at:"
+              echo "https://wordpress.org/plugins/$PLUGIN_SLUG/advanced/"
+            fi
+          fi
+
+          find /tmp/svn/assets -name ".DS_Store" -delete 2>/dev/null || true
+          find /tmp/svn/assets -name ".*" -delete 2>/dev/null || true
+
+      - name: Check SVN status
+        run: |
+          cd /tmp/svn
+          svn status
+
+      - name: Commit changes to WordPress.org
+        run: |
+          cd /tmp/svn
+
+          svn add --force * --auto-props --parents --depth infinity -q 2>/dev/null || true
+          svn status | grep '^\!' | sed 's/! *//' | xargs -I% svn rm %@ 2>/dev/null || true
+
+          svn commit --non-interactive --trust-server-cert \
+            --username=${{ secrets.SVN_USERNAME }} \
+            --password=${{ secrets.SVN_PASSWORD }} \
+            -m "Deploy version ${{ env.TAG_NAME }} from GitHub"
+
+          echo "✅ Plugin successfully deployed to WordPress.org!"

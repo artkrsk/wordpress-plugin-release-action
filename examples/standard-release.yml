@@ -1,0 +1,30 @@
+# Standard WordPress Plugin Release Workflow
+# With custom build configuration and validation
+
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    uses: artkrsk/wordpress-plugin-release-action/.github/workflows/release.yml@v1
+    with:
+      # Build configuration
+      node_version: "23"
+      build_command: "npm run build"
+
+      # Validation
+      validate_zip_script: "__tests__/validate-zip.sh"
+
+      # Assets
+      assets_directory: "__assets__"
+
+      # Enable WordPress.org deployment
+      deploy_to_wordpress: true
+
+    secrets:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
