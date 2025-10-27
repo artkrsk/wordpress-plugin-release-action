@@ -113,8 +113,8 @@ jobs:
       - name: Detect plugin metadata
         id: detect
         run: |
-          # Source detection script
-          source ${{ github.action_path }}/scripts/detect-plugin.sh
+          # Source detection script (script is in the same repository checkout)
+          source ./scripts/detect-plugin.sh
 
           # Detect or use provided values
           if [ -n "${{ inputs.plugin_slug }}" ]; then
