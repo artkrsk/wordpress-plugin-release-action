@@ -241,17 +241,23 @@ jobs:
           fetch-depth: 0
 
       - name: Configure Git for private repositories
+        env:
+          GIT_TOKEN: ${{ secrets.PAT_GITHUB_PRIVATE_REPOS || secrets.GITHUB_TOKEN }}
         run: |
-          # Use PAT if available, otherwise fall back to GITHUB_TOKEN
+          # Configure git to use HTTPS with token instead of SSH
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "https://github.com/"
+          
+          # Verify configuration
+          echo "Git URL rewrites configured:"
+          git config --global --get-regexp url
+          
+          # Test token (without exposing it)
           if [ -n "${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}" ]; then
-            echo "Using PAT for private repository access"
-            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "git@github.com:"
-            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "https://github.com/"
+            echo "✅ Using PAT for private repository access"
           else
-            echo "Using GITHUB_TOKEN for repository access"
-            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+            echo "⚠️  Using GITHUB_TOKEN (may have limited access to private repos)"
           fi
 
       - name: Setup Node.js
@@ -337,17 +343,23 @@ jobs:
           fetch-depth: 0
 
       - name: Configure Git for private repositories
+        env:
+          GIT_TOKEN: ${{ secrets.PAT_GITHUB_PRIVATE_REPOS || secrets.GITHUB_TOKEN }}
         run: |
-          # Use PAT if available, otherwise fall back to GITHUB_TOKEN
+          # Configure git to use HTTPS with token instead of SSH
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "https://github.com/"
+          
+          # Verify configuration
+          echo "Git URL rewrites configured:"
+          git config --global --get-regexp url
+          
+          # Test token (without exposing it)
           if [ -n "${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}" ]; then
-            echo "Using PAT for private repository access"
-            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "git@github.com:"
-            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "ssh://git@github.com/"
-            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "https://github.com/"
+            echo "✅ Using PAT for private repository access"
           else
-            echo "Using GITHUB_TOKEN for repository access"
-            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+            echo "⚠️  Using GITHUB_TOKEN (may have limited access to private repos)"
           fi
 
       - name: Setup Node.js
