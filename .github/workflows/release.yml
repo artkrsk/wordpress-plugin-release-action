@@ -5,93 +5,93 @@ on:
     inputs:
       # Plugin identification
       plugin_slug:
-        description: 'Plugin slug (auto-detected if not provided)'
+        description: "Plugin slug (auto-detected if not provided)"
         required: false
         type: string
       main_plugin_file:
-        description: 'Main plugin file path (auto-detected if not provided)'
+        description: "Main plugin file path (auto-detected if not provided)"
         required: false
         type: string
 
       # Build configuration
       node_version:
-        description: 'Node.js version for build'
+        description: "Node.js version for build"
         required: false
         type: string
-        default: '23'
+        default: "23"
       build_command:
-        description: 'Build command to execute'
+        description: "Build command to execute"
         required: false
         type: string
-        default: 'npm run build'
+        default: "npm run build"
       skip_build:
-        description: 'Skip build step (for composer-only plugins)'
+        description: "Skip build step (for composer-only plugins)"
         required: false
         type: boolean
         default: false
 
       # Validation configuration
       test_command:
-        description: 'Optional test command to run before release'
+        description: "Optional test command to run before release"
         required: false
         type: string
       validate_zip_script:
-        description: 'Path to custom ZIP validation script'
+        description: "Path to custom ZIP validation script"
         required: false
         type: string
 
       # Paths configuration
       zip_path:
-        description: 'Path to generated ZIP file (supports {slug} placeholder)'
+        description: "Path to generated ZIP file (supports {slug} placeholder)"
         required: false
         type: string
-        default: 'dist/{slug}.zip'
+        default: "dist/{slug}.zip"
       assets_directory:
-        description: 'Directory containing WordPress.org assets'
+        description: "Directory containing WordPress.org assets"
         required: false
         type: string
-        default: '__assets__'
+        default: "__assets__"
 
       # WordPress.org deployment
       deploy_to_wordpress:
-        description: 'Deploy to WordPress.org SVN repository'
+        description: "Deploy to WordPress.org SVN repository"
         required: false
         type: boolean
         default: true
       wordpress_svn_url:
-        description: 'WordPress.org SVN URL (auto-constructed if not provided)'
+        description: "WordPress.org SVN URL (auto-constructed if not provided)"
         required: false
         type: string
 
       # Changelog configuration
       changelog_since_last_tag:
-        description: 'Generate changelog from last tag'
+        description: "Generate changelog from last tag"
         required: false
         type: boolean
         default: true
       initial_release_changelog:
-        description: 'Custom changelog for initial release'
+        description: "Custom changelog for initial release"
         required: false
         type: string
 
       # Version validation
       skip_version_validation:
-        description: 'Skip version consistency checks'
+        description: "Skip version consistency checks"
         required: false
         type: boolean
         default: false
       version_files:
-        description: 'JSON array of files to check for version consistency'
+        description: "JSON array of files to check for version consistency"
         required: false
         type: string
         default: '["plugin_header", "readme.txt", "package.json"]'
 
     secrets:
       SVN_USERNAME:
-        description: 'WordPress.org SVN username'
+        description: "WordPress.org SVN username"
         required: false
       SVN_PASSWORD:
-        description: 'WordPress.org SVN password'
+        description: "WordPress.org SVN password"
         required: false
 
 jobs:
@@ -113,9 +113,82 @@ jobs:
       - name: Detect plugin metadata
         id: detect
         run: |
-          # Source detection script (script is in the same repository checkout)
-          source ./scripts/detect-plugin.sh
-
+          # Inline plugin detection functions
+          detect_main_plugin_file() {
+            local main_file=""
+            
+            # Check root directory first
+            for file in *.php; do
+              if [ -f "$file" ] && grep -q "Plugin Name:" "$file"; then
+                main_file="$file"
+                break
+              fi
+            done
+            
+            # Check common plugin directories
+            if [ -z "$main_file" ]; then
+              for dir in src wordpress-plugin plugin; do
+                if [ -d "$dir" ]; then
+                  for file in "$dir"/*.php; do
+                    if [ -f "$file" ] && grep -q "Plugin Name:" "$file"; then
+                      main_file="$file"
+                      break 2
+                    fi
+                  done
+                fi
+              done
+            fi
+            
+            # Search recursively if still not found
+            if [ -z "$main_file" ]; then
+              main_file=$(find . -maxdepth 3 -name "*.php" -type f -exec grep -l "Plugin Name:" {} \; | head -1)
+            fi
+            
+            if [ -z "$main_file" ]; then
+              echo "ERROR: Could not detect main plugin file" >&2
+              exit 1
+            fi
+            
+            echo "${main_file#./}"
+          }
+          
+          detect_plugin_slug() {
+            local main_file="${1:-}"
+            if [ -z "$main_file" ]; then
+              main_file=$(detect_main_plugin_file)
+            fi
+            
+            local slug=$(basename "$main_file" .php)
+            local dir=$(dirname "$main_file")
+            
+            if [ "$dir" != "." ] && [ "$(basename "$dir")" != "src" ] && [ "$(basename "$dir")" != "wordpress-plugin" ]; then
+              slug=$(basename "$dir")
+            fi
+            
+            echo "$slug"
+          }
+          
+          extract_plugin_version() {
+            local main_file="${1:-}"
+            if [ -z "$main_file" ]; then
+              main_file=$(detect_main_plugin_file)
+            fi
+            
+            if [ ! -f "$main_file" ]; then
+              echo "ERROR: Plugin file not found: $main_file" >&2
+              exit 1
+            fi
+            
+            local version=$(grep -m 1 "Version:" "$main_file" | sed 's/.*Version:\s*//' | tr -d '\r\n' | xargs)
+            
+            if [ -z "$version" ]; then
+              echo "ERROR: Could not extract version from $main_file" >&2
+              exit 1
+            fi
+            
+            echo "$version"
+          }
+          
           # Detect or use provided values
           if [ -n "${{ inputs.plugin_slug }}" ]; then
             PLUGIN_SLUG="${{ inputs.plugin_slug }}"
@@ -186,7 +259,7 @@ jobs:
         if: ${{ !inputs.skip_build }}
         run: ${{ inputs.build_command }}
         env:
-          DEBUG: '1'
+          DEBUG: "1"
 
       - name: Run custom tests
         if: ${{ inputs.test_command }}
