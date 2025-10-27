@@ -151,7 +151,7 @@ jobs:
             
             echo "${main_file#./}"
           }
-          
+
           detect_plugin_slug() {
             local main_file="${1:-}"
             if [ -z "$main_file" ]; then
@@ -167,7 +167,7 @@ jobs:
             
             echo "$slug"
           }
-          
+
           extract_plugin_version() {
             local main_file="${1:-}"
             if [ -z "$main_file" ]; then
@@ -188,7 +188,7 @@ jobs:
             
             echo "$version"
           }
-          
+
           # Detect or use provided values
           if [ -n "${{ inputs.plugin_slug }}" ]; then
             PLUGIN_SLUG="${{ inputs.plugin_slug }}"
@@ -247,7 +247,18 @@ jobs:
         if: ${{ !inputs.skip_build }}
         run: |
           if [ -f "package.json" ]; then
-            npm install
+            # Auto-detect package manager based on lockfile
+            if [ -f "pnpm-lock.yaml" ]; then
+              echo "📦 Detected pnpm"
+              corepack enable
+              pnpm install
+            elif [ -f "yarn.lock" ]; then
+              echo "📦 Detected yarn"
+              yarn install
+            else
+              echo "📦 Using npm"
+              npm install
+            fi
           fi
 
       - name: Install system dependencies
@@ -366,7 +377,18 @@ jobs:
         if: ${{ !inputs.skip_build }}
         run: |
           if [ -f "package.json" ]; then
-            npm install
+            # Auto-detect package manager based on lockfile
+            if [ -f "pnpm-lock.yaml" ]; then
+              echo "📦 Detected pnpm"
+              corepack enable
+              pnpm install
+            elif [ -f "yarn.lock" ]; then
+              echo "📦 Detected yarn"
+              yarn install
+            else
+              echo "📦 Using npm"
+              npm install
+            fi
           fi
 
       - name: Install system dependencies
