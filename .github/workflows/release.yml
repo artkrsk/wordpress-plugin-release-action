@@ -93,6 +93,9 @@ on:
       SVN_PASSWORD:
         description: "WordPress.org SVN password"
         required: false
+      PAT_GITHUB_PRIVATE_REPOS:
+        description: "Personal Access Token for accessing private GitHub repositories (optional)"
+        required: false
 
 jobs:
   detect:
@@ -239,8 +242,17 @@ jobs:
 
       - name: Configure Git for private repositories
         run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          # Use PAT if available, otherwise fall back to GITHUB_TOKEN
+          if [ -n "${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}" ]; then
+            echo "Using PAT for private repository access"
+            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "https://github.com/"
+          else
+            echo "Using GITHUB_TOKEN for repository access"
+            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          fi
 
       - name: Setup Node.js
         if: ${{ !inputs.skip_build }}
@@ -326,8 +338,17 @@ jobs:
 
       - name: Configure Git for private repositories
         run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          # Use PAT if available, otherwise fall back to GITHUB_TOKEN
+          if [ -n "${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}" ]; then
+            echo "Using PAT for private repository access"
+            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "ssh://git@github.com/"
+            git config --global url."https://x-access-token:${{ secrets.PAT_GITHUB_PRIVATE_REPOS }}@github.com/".insteadOf "https://github.com/"
+          else
+            echo "Using GITHUB_TOKEN for repository access"
+            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+            git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          fi
 
       - name: Setup Node.js
         if: ${{ !inputs.skip_build }}
