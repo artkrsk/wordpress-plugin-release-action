@@ -481,6 +481,9 @@ jobs:
     needs: [detect, build_and_release]
     if: ${{ inputs.deploy_to_wordpress }}
     runs-on: ubuntu-latest
+    environment:
+      name: wordpress-org
+      url: https://wordpress.org/plugins/${{ needs.detect.outputs.plugin_slug }}/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
