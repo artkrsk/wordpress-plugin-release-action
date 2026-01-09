@@ -69,6 +69,10 @@ on:
         required: false
         type: boolean
         default: true
+      custom_changelog:
+        description: "Custom changelog body (overrides automatic generation)"
+        required: false
+        type: string
       initial_release_changelog:
         description: "Custom changelog for initial release"
         required: false
@@ -423,7 +427,12 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          if [ "${{ inputs.changelog_since_last_tag }}" = "true" ]; then
+          if [ -n "${{ inputs.custom_changelog }}" ]; then
+            # Use custom changelog if provided
+            echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+            echo "${{ inputs.custom_changelog }}" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          elif [ "${{ inputs.changelog_since_last_tag }}" = "true" ]; then
             PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
             if [ -z "$PREVIOUS_TAG" ]; then
