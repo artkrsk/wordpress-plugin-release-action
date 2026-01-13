@@ -247,6 +247,13 @@ jobs:
         with:
           node-version: ${{ inputs.node_version }}
 
+      - name: Setup PHP
+        if: ${{ !inputs.skip_build }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          tools: composer
+
       - name: Install dependencies
         if: ${{ !inputs.skip_build }}
         run: |
@@ -328,6 +335,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node_version }}
+
+      - name: Setup PHP
+        if: ${{ !inputs.skip_build }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0'
+          tools: composer
 
       - name: Validate version consistency
         if: ${{ !inputs.skip_version_validation }}
