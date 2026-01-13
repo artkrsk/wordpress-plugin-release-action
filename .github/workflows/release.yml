@@ -19,6 +19,11 @@ on:
         required: false
         type: string
         default: "23"
+      php_version:
+        description: "PHP version for Composer builds"
+        required: false
+        type: string
+        default: "8.0"
       build_command:
         description: "Build command to execute"
         required: false
@@ -251,7 +256,7 @@ jobs:
         if: ${{ !inputs.skip_build }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.0'
+          php-version: ${{ inputs.php_version }}
           tools: composer
 
       - name: Install dependencies
@@ -340,7 +345,7 @@ jobs:
         if: ${{ !inputs.skip_build }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.0'
+          php-version: ${{ inputs.php_version }}
           tools: composer
 
       - name: Validate version consistency
