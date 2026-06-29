@@ -82,6 +82,11 @@ on:
         description: "Custom changelog for initial release"
         required: false
         type: string
+      generate_release_notes:
+        description: "Append GitHub's auto-generated release notes (PRs/contributors) to the release body"
+        required: false
+        type: boolean
+        default: false
 
       # Version validation
       skip_version_validation:
@@ -362,11 +367,19 @@ jobs:
 
           VERSIONS_TO_CHECK='${{ inputs.version_files }}'
 
-          # Check readme.txt if specified
+          # Check readme.txt if specified (prefer the plugin dir, fall back to repo root)
           if echo "$VERSIONS_TO_CHECK" | grep -q "readme.txt"; then
-            if [ -f "readme.txt" ]; then
-              README_VERSION=$(grep "Stable tag:" readme.txt | awk '{print $3}' | tr -d '\r')
-              echo "Readme version: $README_VERSION"
+            README_PATH=""
+            PLUGIN_DIR="$(dirname "$PLUGIN_FILE")"
+            if [ -f "$PLUGIN_DIR/readme.txt" ]; then
+              README_PATH="$PLUGIN_DIR/readme.txt"
+            elif [ -f "readme.txt" ]; then
+              README_PATH="readme.txt"
+            fi
+
+            if [ -n "$README_PATH" ]; then
+              README_VERSION=$(grep "Stable tag:" "$README_PATH" | awk '{print $3}' | tr -d '\r')
+              echo "Readme version ($README_PATH): $README_VERSION"
 
               if [ "$TAG_VERSION" != "$README_VERSION" ]; then
                 echo "❌ readme.txt version mismatch!"
@@ -480,11 +493,12 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{ needs.detect.outputs.zip_path }}
           draft: false
           prerelease: false
+          generate_release_notes: ${{ inputs.generate_release_notes }}
           name: Release ${{ github.ref_name }}
           body: |
             # ${{ needs.detect.outputs.plugin_slug }} ${{ github.ref_name }}
